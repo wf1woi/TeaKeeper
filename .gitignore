@@ -4,3 +4,4 @@
 work/.github-token
 work/.github-token.*
 outputs/.DS_Store
+outputs/
