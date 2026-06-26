@@ -1,0 +1,6 @@
+.DS_Store
+*.swp
+*.tmp
+work/.github-token
+work/.github-token.*
+outputs/.DS_Store
