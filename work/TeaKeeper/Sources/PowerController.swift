@@ -31,7 +31,7 @@ final class PowerController {
         let reason = "TeaKeeper Prevent Sleep" as CFString
         var idleID = IOPMAssertionID(0)
         let idleResult = IOPMAssertionCreateWithName(
-            kIOPMAssertionTypeNoIdleSleep as CFString,
+            kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
             IOPMAssertionLevel(kIOPMAssertionLevelOn),
             reason,
             &idleID
@@ -47,7 +47,7 @@ final class PowerController {
         if !allowDisplaySleep {
             var displayID = IOPMAssertionID(0)
             let displayResult = IOPMAssertionCreateWithName(
-                kIOPMAssertionTypeNoDisplaySleep as CFString,
+                kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
                 IOPMAssertionLevel(kIOPMAssertionLevelOn),
                 reason,
                 &displayID

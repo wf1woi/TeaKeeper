@@ -48,7 +48,7 @@ extension UserDefaults {
     func registerTeaKeeperDefaults() {
         register(defaults: [
             PrefKey.enableAtLaunch: false,
-            PrefKey.allowDisplaySleep: false,
+            PrefKey.allowDisplaySleep: true,
             PrefKey.stopOnLowBattery: true,
             PrefKey.selectedDurationSeconds: 0,
             PrefKey.scheduleEnabled: false,
