@@ -10,6 +10,20 @@ final class PowerController {
         idleAssertionID != 0 || displayAssertionID != 0 || systemAssertionID != 0
     }
 
+    func assertionsAreValid(allowDisplaySleep: Bool, lidAwake: Bool) -> Bool {
+        guard assertionIsValid(idleAssertionID) else { return false }
+
+        if !allowDisplaySleep, !assertionIsValid(displayAssertionID) {
+            return false
+        }
+
+        if lidAwake, !assertionIsValid(systemAssertionID) {
+            return false
+        }
+
+        return true
+    }
+
     func enable(allowDisplaySleep: Bool, lidAwake: Bool) throws {
         DebugLog.write("PowerController.enable allowDisplaySleep=\(allowDisplaySleep) lidAwake=\(lidAwake)")
         disable()
@@ -86,6 +100,15 @@ final class PowerController {
 
     deinit {
         disable()
+    }
+
+    private func assertionIsValid(_ assertionID: IOPMAssertionID) -> Bool {
+        guard assertionID != 0,
+              let properties = IOPMAssertionCopyProperties(assertionID) else {
+            return false
+        }
+        properties.release()
+        return true
     }
 }
 

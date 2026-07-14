@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
     private var endDate: Date?
     private var enabledBySchedule = false
     private var scheduleMenuView: ScheduleMenuView?
+    private var nextAssertionHealthCheck = Date()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         defaults.registerTeaKeeperDefaults()
@@ -49,6 +50,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
     private func rebuildMenu() {
         menu = NSMenu()
         menu.autoenablesItems = false
+
+        let status = NSMenuItem(title: statusTitle(), action: nil, keyEquivalent: "")
+        status.isEnabled = false
+        menu.addItem(status)
+
+        let toggle = NSMenuItem(
+            title: powerController.isEnabled ? L.text("menu.turnOff") : L.text("menu.turnOn"),
+            action: #selector(toggleAwake),
+            keyEquivalent: ""
+        )
+        toggle.target = self
+        menu.addItem(toggle)
+        menu.addItem(NSMenuItem.separator())
 
         menu.addItem(sectionHeader(L.text("menu.section.start")))
         menu.addItem(openAtLoginMenuItem())
@@ -279,11 +293,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
         }
 
         checkSchedule()
+        checkAssertionHealth()
         updateStatusIcon()
     }
 
+    private func checkAssertionHealth() {
+        guard powerController.isEnabled, Date() >= nextAssertionHealthCheck else { return }
+        nextAssertionHealthCheck = Date().addingTimeInterval(30)
+
+        let allowDisplaySleep = defaults.bool(forKey: PrefKey.allowDisplaySleep)
+        let lidAwake = defaults.bool(forKey: PrefKey.lidAwake)
+        guard !powerController.assertionsAreValid(
+            allowDisplaySleep: allowDisplaySleep,
+            lidAwake: lidAwake
+        ) else { return }
+
+        DebugLog.write("Power assertions were lost; recreating them")
+        do {
+            try powerController.enable(
+                allowDisplaySleep: allowDisplaySleep,
+                lidAwake: lidAwake
+            )
+        } catch {
+            DebugLog.write("Assertion health recovery failed: \(error.localizedDescription)")
+            showAlert(message: L.text("alert.enableFailed.title"), detail: error.localizedDescription)
+        }
+    }
+
     private func checkSchedule() {
-        guard defaults.bool(forKey: PrefKey.scheduleEnabled) else { return }
+        guard defaults.bool(forKey: PrefKey.scheduleEnabled) else {
+            if enabledBySchedule {
+                setAwake(false, source: "schedule")
+            }
+            return
+        }
 
         let nowDate = Date()
         let weekdayMask = defaults.integer(forKey: PrefKey.scheduleWeekdaysMask)
@@ -321,21 +364,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
             return L.text("menu.status.off")
         }
 
+        let screenMode = defaults.bool(forKey: PrefKey.allowDisplaySleep)
+            ? L.text("menu.status.screenAllowed")
+            : L.text("menu.status.screenPrevented")
+
         if let endDate {
             let remaining = max(0, Int(endDate.timeIntervalSinceNow))
             let hours = remaining / 3600
             let minutes = (remaining % 3600) / 60
             let seconds = remaining % 60
             if hours > 0 {
-                return L.format("menu.status.on.hours", hours, minutes)
+                return L.format("menu.status.on.hours", screenMode, hours, minutes)
             }
             if minutes > 0 {
-                return L.format("menu.status.on.minutes", minutes, seconds)
+                return L.format("menu.status.on.minutes", screenMode, minutes, seconds)
             }
-            return L.format("menu.status.on.seconds", seconds)
+            return L.format("menu.status.on.seconds", screenMode, seconds)
         }
 
-        return L.text("menu.status.on.infinite")
+        return L.format("menu.status.on.infinite", screenMode)
     }
 
     private func updateStatusIcon() {
