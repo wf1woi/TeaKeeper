@@ -7,17 +7,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
     private var menu = NSMenu()
     private var tickTimer: Timer?
     private var durationTimer: Timer?
+    private var displayActivityTimer: Timer?
     private var endDate: Date?
     private var enabledBySchedule = false
     private var scheduleMenuView: ScheduleMenuView?
     private var nextAssertionHealthCheck = Date.distantFuture
     private var nextBatteryCheck = Date()
     private var lastLidState: Bool?
+    private var quitRequested = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         defaults.registerTeaKeeperDefaults()
         lastLidState = LidStateMonitor.isClosed()
-        DebugLog.write("didFinishLaunching enableAtLaunch=\(defaults.bool(forKey: PrefKey.enableAtLaunch)) allowDisplaySleep=\(defaults.bool(forKey: PrefKey.allowDisplaySleep))")
+        DebugLog.write(
+            "didFinishLaunching enableAtLaunch=\(defaults.bool(forKey: PrefKey.enableAtLaunch)) " +
+            "allowDisplaySleep=\(defaults.bool(forKey: PrefKey.allowDisplaySleep)) " +
+            "duration=\(defaults.double(forKey: PrefKey.selectedDurationSeconds)) " +
+            "scheduleEnabled=\(defaults.bool(forKey: PrefKey.scheduleEnabled)) " +
+            "clickToggleEnabled=\(defaults.bool(forKey: PrefKey.clickToggleEnabled))"
+        )
         NSApp.setActivationPolicy(.accessory)
         createStatusItem()
         rebuildMenu()
@@ -30,7 +38,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        DebugLog.write("applicationWillTerminate source=\(quitRequested ? "menu-quit" : "system")")
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        displayActivityTimer?.invalidate()
         powerController.disable()
     }
 
@@ -217,7 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
 
         if (key == PrefKey.allowDisplaySleep || key == PrefKey.lidAwake),
            powerController.isEnabled {
-            reconfigureAssertions()
+            reconfigureAssertions(source: "preference:\(key)")
         }
 
         if key == PrefKey.scheduleEnabled {
@@ -233,6 +243,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
     }
 
     @objc private func quit() {
+        quitRequested = true
+        DebugLog.write("quit requested source=menu")
         NSApp.terminate(nil)
     }
 
@@ -267,6 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
             nextAssertionHealthCheck = .distantFuture
         }
 
+        updateDisplayActivityTimer()
         updateStatusIcon()
         rebuildMenu()
     }
@@ -299,6 +312,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
         tickTimer?.tolerance = 10
     }
 
+    private func updateDisplayActivityTimer() {
+        displayActivityTimer?.invalidate()
+        displayActivityTimer = nil
+
+        guard powerController.isEnabled, !effectiveAllowDisplaySleep() else { return }
+
+        let timer = Timer(timeInterval: 90, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            guard self.powerController.isEnabled, !self.effectiveAllowDisplaySleep() else {
+                self.updateDisplayActivityTimer()
+                return
+            }
+            self.powerController.wakeDisplay(logSuccess: false)
+        }
+        timer.tolerance = 15
+        RunLoop.main.add(timer, forMode: .common)
+        displayActivityTimer = timer
+    }
+
     private func registerForSystemEvents() {
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(
@@ -319,11 +351,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
             name: NSWorkspace.screensDidSleepNotification,
             object: nil
         )
+        center.addObserver(
+            self,
+            selector: #selector(sessionDidResignActive),
+            name: NSWorkspace.sessionDidResignActiveNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(sessionDidBecomeActive),
+            name: NSWorkspace.sessionDidBecomeActiveNotification,
+            object: nil
+        )
     }
 
     @objc private func systemDidWake() {
+        DebugLog.write("workspace event=system-did-wake")
         if powerController.isEnabled {
-            reconfigureAssertions()
+            reconfigureAssertions(source: "system-wake")
         } else {
             checkSchedule()
         }
@@ -331,15 +376,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
 
     @objc private func screenDidWake() {
         lastLidState = LidStateMonitor.isClosed()
+        DebugLog.write("workspace event=screen-did-wake lidClosed=\(String(describing: lastLidState))")
+        if powerController.isEnabled {
+            reconfigureAssertions(source: "screen-did-wake")
+        }
     }
 
     @objc private func screenDidSleep() {
         let lidState = LidStateMonitor.isClosed()
         lastLidState = lidState
-        guard lidState == true,
-              powerController.isEnabled,
-              defaults.bool(forKey: PrefKey.lidAwake) else { return }
-        reconfigureAssertions()
+        DebugLog.write("workspace event=screen-did-sleep lidClosed=\(String(describing: lidState))")
+        guard powerController.isEnabled else { return }
+
+        if lidState == true {
+            reconfigureAssertions(source: "screen-sleep-lid-closed")
+        } else if !effectiveAllowDisplaySleep() {
+            reconfigureAssertions(source: "unexpected-screen-sleep")
+        }
+    }
+
+    @objc private func sessionDidResignActive() {
+        DebugLog.write("workspace event=session-did-resign-active")
+    }
+
+    @objc private func sessionDidBecomeActive() {
+        DebugLog.write("workspace event=session-did-become-active")
     }
 
     private func tick() {
@@ -374,9 +435,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
         guard currentLidState != lastLidState else { return }
         lastLidState = currentLidState
 
-        guard powerController.isEnabled,
-              defaults.bool(forKey: PrefKey.lidAwake) else { return }
-        reconfigureAssertions()
+        guard powerController.isEnabled else { return }
+        if defaults.bool(forKey: PrefKey.lidAwake) || !defaults.bool(forKey: PrefKey.allowDisplaySleep) {
+            reconfigureAssertions(source: "lid-state-change")
+        }
     }
 
     private func checkAssertionHealth() {
@@ -402,13 +464,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
         }
     }
 
-    private func reconfigureAssertions() {
+    private func reconfigureAssertions(source: String) {
+        DebugLog.write("reconfigureAssertions source=\(source)")
         do {
             try powerController.enable(
                 allowDisplaySleep: effectiveAllowDisplaySleep(),
                 lidAwake: defaults.bool(forKey: PrefKey.lidAwake)
             )
             nextAssertionHealthCheck = Date().addingTimeInterval(600)
+            updateDisplayActivityTimer()
             updateStatusIcon()
             rebuildMenu()
         } catch {
@@ -418,12 +482,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ScheduleMenuViewDelega
     }
 
     private func effectiveAllowDisplaySleep() -> Bool {
-        if defaults.bool(forKey: PrefKey.allowDisplaySleep) {
-            return true
-        }
-
-        guard defaults.bool(forKey: PrefKey.lidAwake) else { return false }
-        return LidStateMonitor.isClosed() ?? lastLidState ?? false
+        DisplaySleepPolicy.allowsDisplaySleep(
+            userAllowsDisplaySleep: defaults.bool(forKey: PrefKey.allowDisplaySleep),
+            lidClosed: LidStateMonitor.isClosed() ?? lastLidState
+        )
     }
 
     private func checkSchedule() {
