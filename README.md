@@ -1,54 +1,141 @@
 # TeaKeeper
 
-TeaKeeper is a small macOS menu bar utility that keeps your Mac awake.
+[中文](#中文) | [English](#english)
 
-## Features
+TeaKeeper 是一款轻量的 macOS 菜单栏防休眠工具。它可以在屏幕正常熄灭的同时让 Mac 和后台任务继续运行，也可以按需让屏幕保持常亮。
 
-- Menu bar tea icon with light/dark mode friendly rendering
-- Prevent idle sleep
-- Optional screen sleep allowance
-- Optional system sleep assertion for lid-close scenarios
-- Scheduled wake prevention by time range and weekday
-- Duration presets
-- Stop when battery is below 20%
-- Optional left-click toggle
-- Optional launch at login
-- Chinese and English UI
+> 当前版本：`0.1.2`（Build 5）
+>
+> 系统要求：macOS 13.0 或更高版本，Apple Silicon
 
-## Usage
+## 中文
 
-Download `TeaKeeper.app.zip` from the latest release:
+### 功能
 
-<https://github.com/wf1woi/TeaKeeper/releases/latest>
+- 防止 Mac 因空闲自动进入系统休眠。
+- 默认允许屏幕按 macOS 的节能设置正常熄灭，后台任务仍可继续运行。
+- 可选择禁止屏幕休眠，使屏幕保持常亮。
+- 支持无限时长，以及 5 分钟到 12 小时的定时防休眠。
+- 支持按时间段和星期自动开启、关闭防休眠。
+- 支持登录时启动 TeaKeeper，以及应用启动时自动开启防休眠。
+- 可在电池电量低于 20% 时自动停止防休眠。
+- 可选择左键单击菜单栏图标，快速开启或关闭防休眠。
+- 可选择合盖时保持主机运行；合盖后内置屏幕始终允许休眠。
+- 菜单界面根据 macOS 首选语言自动显示简体中文或英文。
 
-Unzip it, open `TeaKeeper.app`, then use the tea icon in the macOS menu bar.
+### 安装
 
-- Right-click the icon to open the menu.
-- Enable `单击图标开启/关闭防休眠` / `Left-click toggles prevent sleep` if you want left-click toggling.
-- Use `定时防休眠` / `Scheduled Prevent Sleep` to configure time and weekdays.
+1. 从 [Releases](https://github.com/wf1woi/TeaKeeper/releases/latest) 下载 `TeaKeeper.app.zip`。
+2. 解压后，将 `TeaKeeper.app` 移动到“应用程序”文件夹。
+3. 首次启动时，如果 macOS 提示无法验证开发者，请在 Finder 中右键点击 TeaKeeper，选择“打开”，然后再次确认。
 
-## Build
+当前安装包尚未使用 Developer ID 签名或经过 Apple 公证，因此首次启动会出现 Gatekeeper 提示。
 
-```bash
-work/TeaKeeper/build.sh
-```
+### 使用方法
 
-The build output is written to:
+TeaKeeper 启动后只显示在菜单栏，不会显示 Dock 图标。
+
+1. 右键点击菜单栏中的茶杯图标，打开功能菜单。
+2. 点击“开启防休眠”，Mac 将保持运行。
+3. 默认勾选“允许屏幕休眠（主机保持唤醒）”。此时屏幕可以正常变黑，但 Mac 不会因空闲而休眠，下载、编译和 Codex 等后台任务可以继续执行。
+4. 取消勾选“允许屏幕休眠”后，TeaKeeper 会同时让屏幕保持常亮。
+5. 可在“持续时间”或“定时防休眠”中设置自动停止时间。
+6. 点击“关闭防休眠”或退出 TeaKeeper，即可释放由应用创建的电源断言。
+
+如果开启了“单击图标开启/关闭防休眠”，左键点击菜单栏图标即可切换状态；右键始终打开菜单。
+
+### 休眠行为说明
+
+- **屏幕变黑不等于系统休眠。** 开启防休眠并允许屏幕休眠时，屏幕可以熄灭，Mac 和后台任务仍会继续运行。
+- **默认允许屏幕休眠。** TeaKeeper 不会改变 macOS 中设置的屏幕关闭时间。
+- **合盖安全优先。** 即使选择合盖时保持主机运行，TeaKeeper 也不会强制点亮已合盖 Mac 的内置屏幕。
+- “合盖时主机保持运行”受机型、电源状态、外接显示器和 macOS 电源策略影响，不能替代 Apple 官方支持的合盖工作条件。
+
+### 日志
+
+运行日志保存在：
 
 ```text
-outputs/TeaKeeper.app
+~/Library/Logs/TeaKeeper/TeaKeeper.log
 ```
 
-`outputs/` is ignored by git. Packaged builds are published through GitHub Releases.
+日志达到约 512 KB 后会轮转为 `TeaKeeper.old.log`，便于排查防休眠断言或系统唤醒问题。
 
-## GitHub Token Permissions
+### 从源码构建
 
-For pushing this public repository with a classic personal access token:
+```bash
+git clone https://github.com/wf1woi/TeaKeeper.git
+cd TeaKeeper
+./work/TeaKeeper/test.sh
+./work/TeaKeeper/build.sh
+```
 
-- `public_repo`
+构建后的应用位于 `outputs/TeaKeeper.app`。当前构建脚本生成 Apple Silicon 版本，并使用 ad-hoc 签名。
 
-If you want the repository to be private, use:
+---
 
-- `repo`
+## English
 
-No `workflow`, package, or organization permissions are required.
+TeaKeeper is a lightweight macOS menu bar utility that prevents idle system sleep. It can keep your Mac and background tasks running while the display turns off normally, or keep the display awake when needed.
+
+### Features
+
+- Prevents the Mac from entering idle system sleep.
+- Allows the display to turn off according to macOS Energy settings by default while background tasks continue running.
+- Optionally prevents display sleep and keeps the screen awake.
+- Supports an infinite duration and presets from 5 minutes to 12 hours.
+- Supports scheduled activation by time range and weekday.
+- Can launch at login and enable prevent-sleep automatically when TeaKeeper starts.
+- Can stop prevent-sleep automatically when battery level falls below 20%.
+- Can toggle prevent-sleep with a left-click on the menu bar icon.
+- Can optionally keep the host running with the lid closed; the built-in display is always allowed to sleep while the lid is closed.
+- Automatically displays Simplified Chinese or English based on the preferred macOS language.
+
+### Installation
+
+1. Download `TeaKeeper.app.zip` from the [Releases](https://github.com/wf1woi/TeaKeeper/releases/latest) page.
+2. Extract the archive and move `TeaKeeper.app` to the Applications folder.
+3. On first launch, if macOS cannot verify the developer, Control-click or right-click TeaKeeper in Finder, choose **Open**, and confirm again.
+
+The current build is not signed with a Developer ID certificate or notarized by Apple, so Gatekeeper will show a warning on first launch.
+
+### Usage
+
+TeaKeeper runs only in the menu bar and does not show a Dock icon.
+
+1. Right-click the teacup icon in the menu bar to open the menu.
+2. Select **Turn On Prevent Sleep** to keep the Mac running.
+3. **Allow Screen Sleep (Mac Stays Awake)** is enabled by default. The display may turn black, but the Mac does not enter idle sleep, so downloads, builds, Codex, and other background tasks can continue.
+4. Disable **Allow Screen Sleep** when you also want the display to remain on.
+5. Use **Duration** or **Scheduled Prevent Sleep** to configure automatic activation and shutdown.
+6. Select **Turn Off Prevent Sleep** or quit TeaKeeper to release the power assertions created by the app.
+
+When **Left-click toggles prevent sleep** is enabled, left-clicking the menu bar icon toggles the state. Right-click always opens the menu.
+
+### Sleep Behavior
+
+- **A black display is not the same as system sleep.** When prevent-sleep is active and display sleep is allowed, the screen can turn off while the Mac and its background tasks keep running.
+- **Display sleep is allowed by default.** TeaKeeper does not change the display timeout configured in macOS.
+- **Closed-lid display safety takes priority.** TeaKeeper never forces the built-in display to stay lit while the lid is closed.
+- **Keep Mac running with lid closed** is still subject to Mac model, power source, external-display setup, and macOS power policy. It does not replace Apple's officially supported closed-display requirements.
+
+### Logs
+
+Runtime diagnostics are stored at:
+
+```text
+~/Library/Logs/TeaKeeper/TeaKeeper.log
+```
+
+The log rotates to `TeaKeeper.old.log` at approximately 512 KB to help diagnose power assertion and wake-related issues.
+
+### Build From Source
+
+```bash
+git clone https://github.com/wf1woi/TeaKeeper.git
+cd TeaKeeper
+./work/TeaKeeper/test.sh
+./work/TeaKeeper/build.sh
+```
+
+The built app is written to `outputs/TeaKeeper.app`. The current build script targets Apple Silicon and applies an ad-hoc signature.
